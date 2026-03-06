@@ -1,76 +1,68 @@
-# Pikachu Interaction Optimization Plan
+# 皮卡丘全场景互动优化规划
 
-## Problem Analysis
+## 1. 目标
+全面优化皮卡丘在**休息、互动、等待、观察、呼吸**五种状态下的动画表现，确保动画播放完整、流畅，且符合用户预期的行为逻辑（如“睡觉”应保持躺下，“互动”应及时反馈并恢复）。
 
-The user reported that when clicking the bed to sleep or when the AI generates a sleep action, the "lying down" animation (GIF) is not called.
+## 2. 现状与问题分析
 
-Upon code inspection, we found two main issues:
+### 2.1 动画帧数与时长不匹配
+- **现状**：所有动画帧数已调整为 **24 帧**。
+- **问题**：代码中的**状态切换定时器（Timer）** 和 **动画播放参数（cycles/loop）** 仍基于旧的短帧数（6帧）逻辑。
+    - 例如 `INTERACT` 状态，原定 3200ms 自动切回呼吸。若 24 帧以 90ms/帧播放，一次需 2160ms，两次需 4320ms。当前的 3200ms 会导致动画在第二次播放一半时被强制打断。
 
-1.  **Animation Truncation**:
-    The code currently limits the "rest" animation (`flog_xiuxi`) to only the first **6 frames**.
-    The actual asset folder (`比卡丘动画导出/休息/`) contains **24 frames** (`flog_xiuxi_001.png` to `flog_xiuxi_024.png`).
-    The "lying down" motion likely occurs in the later frames, which are never played.
+### 2.2 状态逻辑区分不明确
+- **现状**：代码中对“持续性状态”（如休息）和“临时性动作”（如互动）的处理逻辑混杂。
+    - **等待 (Wait)** 和 **观察 (Observe)** 目前被设定为几秒后自动切回“呼吸”，这可能不符合预期。例如，如果皮卡丘“去门口等待”，它应该保持在门口“等待”的状态，而不是马上变成“呼吸”。
+    - **休息 (Rest)** 虽然是循环的，但需要确认其播放频率是否让人感觉像是在“睡觉”（呼吸平稳）。
 
-2.  **Position Reset Logic**:
-    When the pet moves to a hotspot (like the bed), the `walkPetAlongPath` function is called with `resetToDefault: true`.
-    This causes the pet to walk to the bed, play the animation (truncated) for a few seconds, and then **teleport back to the default position** (center of the room).
-    For a "sleep" action, the pet should remain on the bed until woken up.
+## 3. 优化方案详情
 
-## Optimization Plan
+### 3.1 动画参数校准表
 
-### 1. Fix Animation Frames
-Update the `makeFrames` calls in `petAnimationStates` to use the correct number of frames for all animations.
+我们将根据 24 帧的标准，重新定义每个状态的播放逻辑：
 
--   **Rest (`flog_xiuxi`)**: Increase from 6 to **24** frames.
--   **Interact (`flog_hudong`)**: Increase from 6 to **24** frames (if applicable).
--   **Wait (`flog_dengdai`)**: Increase from 6 to **24** frames.
--   **Observe (`flog_guancha`)**: Increase from 6 to **24** frames.
--   **Idle (`frog_idle`)**: Increase from 6 to **24** frames.
+| 状态 | 标识符 | 逻辑类型 | 帧间隔 (ms) | 单次时长 (ms) | 循环/次数 | 总持续时长 | 自动切回呼吸? | 备注 |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **呼吸** | `idle_breath` | **持续** | 130 | 3120 | Loop | ∞ | 否 | 基础待机状态 |
+| **休息** | `rest` | **持续** | 150 | 3600 | Loop | ∞ | 否 | 睡觉应保持直到叫醒 |
+| **互动** | `interact` | **单次动作** | 80 | 1920 | 1 次 | ~1920 | **是 (延迟 2000ms)** | 快速反馈，播完即止 |
+| **等待** | `idle_wait` | **持续/长时** | 150 | 3600 | Loop | ∞ | **否** (建议保持) | 到门口等待应保持等待姿态 |
+| **观察** | `idle_observe` | **单次动作** | 120 | 2880 | 1 次 | ~2880 | **是 (延迟 3000ms)** | 看一眼，满足好奇心后恢复 |
 
-### 2. Improve "Go to Bed" Logic
-Modify the movement logic to allow the pet to stay at the target location (bed) when sleeping.
+> *注：原代码中 Wait 和 Observe 都有自动切回逻辑，建议根据实际场景调整。如果“等待”是去门口等主人，那应该一直等。如果只是原地“等待指令”，那切回呼吸也可以。考虑到“去门口等待”的意图，建议改为持续状态，或大幅延长保持时间。*
 
--   **Update `walkPetAlongPath` / `movePetToSpot`**:
-    Ensure `resetToDefault` logic respects the passed option and doesn't force a reset if the action requires staying (like sleeping).
+### 3.2 代码逻辑调整点
 
--   **Update `hotspotBed` Click Handler**:
-    Change `resetToDefault: true` to `resetToDefault: false` so the pet stays on the bed.
+#### A. 调整 `setPetState` 中的定时器
+- **Interact (互动)**：
+    - 帧间隔设为 80ms（稍快，体现兴奋）。
+    - 循环次数设为 1 次（24帧足够表达一个完整动作）。
+    - `schedulePetTransition` 延时设为 2000ms（略大于 1920ms），确保动作播完。
+- **Observe (观察)**：
+    - 帧间隔 120ms。
+    - 循环 1 次。
+    - `schedulePetTransition` 延时 3000ms。
+- **Wait (等待)**：
+    - **修改策略**：根据之前的意图（`wait_at_door`），这应该是一个持续状态。建议**取消自动切回呼吸**，或者设置一个很长的时间（比如 10秒+）再切回，或者仅在用户点击后切回。
+    - 考虑到通用性，如果是“伸懒腰准备出发”这种语义，可以播完切回。但如果是“在门口等”，应该 Loop。
+    - **方案**：改为 `loop: true`，去除自动切回（或大幅延后），让它一直等到有新交互。
 
--   **Update AI Decision Handler**:
-    When the AI intent is `go_to_bed_and_rest` (mapped to `bed` hotspot), ensure `resetToDefault` is set to `false`.
+#### B. 优化 `playPetAnimation`
+- 确保 `rest`, `idle_wait` 等持续状态默认开启 `loop: true`。
+- 确保 `interact`, `idle_observe` 等动作状态默认 `loop: false` 并在回调中能衔接回呼吸。
 
-### 3. State Management
-Ensure that when the pet wakes up (from `REST` to `IDLE` or `INTERACT`), it properly resets its position to the center if it was sleeping on the bed.
-(The current `setPetState` logic for waking up might need to check if the pet is at the bed and walk it back, or just reset position).
-For now, `walkPetAlongPath` with `resetToDefault: false` means the pet stays there.
-If we want it to come back when waking up, we might need a "wake up and return" logic.
-However, for simplicity, we can let the next movement (e.g., "wander" or "go to pot") handle the movement from the current position (bed). `walkPetAlongPath` calculates path from *current* position?
-Let's check `walkPetAlongPath`:
-It takes `pathPoints`. It doesn't calculate path from current position automatically unless the path points start from current position.
-The `buildPathToHotspot` function usually assumes starting from center or specific waypoints.
-If the pet is at the bed, and we want it to go to the pot, the path might need to be adjusted.
-But `walkPetAlongPath` just moves the DOM element.
-If `resetToDefault` is false, the element stays at bed coordinates.
-The next animation/movement should work fine as long as the path generation doesn't assume the pet is at `0,0` (or default).
-Wait, `petAvatarRoom` uses absolute positioning (`bottom`, `left`).
-If we start a new `walkPetAlongPath`, it starts from current position?
-`walkPetAlongPath` logic:
-```javascript
-            const point = pathPoints[index];
-            if (point && typeof point.bottom === 'string' && typeof point.left === 'string') {
-                petAvatarRoom.style.bottom = point.bottom;
-                petAvatarRoom.style.left = point.left;
-            }
-```
-It just jumps to the first point in `pathPoints`.
-So if `pathPoints` assumes start from center, the pet will teleport from bed to center then walk.
-This is a known limitation of simple path systems.
-Given the current scope, keeping it simple (teleport to start of next path) is acceptable, or we can just let it be.
-The priority is fixing the "sleeping on bed" experience.
+#### C. 交互反馈优化
+- 当用户点击皮卡丘触发“互动”时，确保动画是即时且完整的。
+- 睡觉时（Rest），确保点击床铺或按钮能正确切换状态（叫醒 -> 呼吸/互动）。
 
-## Execution Steps
+## 4. 执行步骤
 
-1.  **Edit `index.html`**:
-    -   Update `petAnimationStates` frame counts.
-    -   Update `hotspotBed` event listener to set `resetToDefault: false`.
-    -   Update `applyBehaviorDecision` to conditionally set `resetToDefault`.
+1.  **修改 `index.html`**：
+    - 更新 `setPetState` 函数中各状态的 `playPetAnimation` 参数（`frameInterval`, `loop`, `cycles`）。
+    - 更新 `schedulePetTransition` 的延迟时间，匹配新的动画时长。
+    - 特别调整 `PET_STATES.IDLE_WAIT` 的逻辑，使其更符合“等待”的语义（建议循环播放，直到下一次决策）。
+
+2.  **验证**：
+    - 点击床 -> 播放睡觉动画（循环，不瞬移）。
+    - 点击皮卡丘 -> 播放互动动画（完整播放一次，然后变回呼吸）。
+    - 触发观察/等待 -> 检查动画时长是否完整。
