@@ -670,60 +670,7 @@
             from { opacity: 0; transform: translate(-50%, 0) scale(0.92); }
             to { opacity: 1; transform: translate(-50%, 0) scale(1); }
         }
-
-        /* 能量传递按钮区域 */
-        #petroom-bottom-stack {
-            position: absolute;
-            left: 50%;
-            transform: translateX(-50%);
-            bottom: calc(env(safe-area-inset-bottom, 0px) + 40px);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 6px;
-            z-index: 40;
-            pointer-events: none;
-        }
-        #energy-fingerprint-area {
-            position: relative;
-            transform-origin: center center;
-            width: 72px;
-            height: 72px;
-            border-radius: 50%;
-            background: rgba(255, 255, 255, 0.25);
-            backdrop-filter: blur(10px);
-            border: 2px solid rgba(255, 255, 255, 0.9);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 50;
-            transition: all 0.3s ease;
-            cursor: pointer;
-            user-select: none;
-            -webkit-user-select: none;
-            touch-action: manipulation;
-            -webkit-touch-callout: none;
-            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.18);
-            pointer-events: auto;
-        }
-        #energy-fingerprint-area:active, #energy-fingerprint-area.active {
-            /* 保持位置不动，只做高亮效果 */
-            transform: translateX(-50%);
-            background: rgba(255, 143, 171, 0.2);
-            border-color: rgba(255, 143, 171, 0.6);
-        }
-        #energy-fingerprint-icon {
-            font-size: 32px;
-            color: rgba(255, 143, 171, 0.6);
-            transition: all 0.3s ease;
-        }
-        #energy-fingerprint-area.active #energy-fingerprint-icon {
-            color: rgba(255, 143, 171, 1);
-            transform: scale(1.1);
-        }
-
-
-
+        
         /* 状态冒泡动画 (Floating Status Bubble) */
         .status-bubble {
             position: absolute;
@@ -1349,20 +1296,6 @@
              <!-- 旧版操作栏已隐藏，改用全新的交互布局 -->
         </div>
 
-        <!-- 能量指纹 + 引导文案：统一底部栈布局 -->
-        <div id="petroom-bottom-stack">
-            <div id="energy-fingerprint-area" aria-label="长按传递能量">
-                 <i class="ph-fill ph-fingerprint" id="energy-fingerprint-icon"></i>
-            </div>
-            <p class="petroom-bottom-hint text-center text-gray-600">
-                <span class="inline-flex items-center justify-center gap-1">
-                    <i class="ph-fill ph-info text-[11px]"></i>
-                    <span class="text-[10px] font-medium">长按底部指纹，可以把今天的能量传给我。</span>
-                </span>
-                <span class="block mt-0.5 text-[9px] text-gray-500">一段时间不操作时，我会自己想想接下来要做什么～</span>
-            </p>
-        </div>
-
         <!-- 能量粒子层 -->
         <div id="energy-particles"></div>
 
@@ -1390,28 +1323,7 @@
             <input id="diary-image-input" type="file" accept="image/*" class="hidden">
         </div>
 
-        <!-- 首次进入宠物小屋的轻量引导蒙层 -->
-        <div id="room-hint" class="room-onboarding-overlay">
-            <div class="room-onboarding-card">
-                <div class="text-xs font-bold text-gray-700 mb-1 flex items-center gap-1">
-                    <span>🌟 小提示</span>
-                    <span class="text-[10px] text-gray-400">第一次来可以先这样玩</span>
-                </div>
-                <div class="room-onboarding-step">
-                    <span class="icon">🗺️</span>
-                    <p>点房间墙上的<strong>地图</strong>，带我去打一次卡，我会记住今天的旅程。</p>
-                </div>
-                <div class="room-onboarding-step">
-                    <span class="icon">🌀</span>
-                    <p>长按底部的<strong>指纹</strong>，把今天的能量传给我，我会用一条小动作回应你。</p>
-                </div>
-                <div class="room-onboarding-actions">
-                    <button type="button" class="px-3 py-1 rounded-full bg-[#ff8fab] text-white font-bold shadow-sm active:scale-95 transition" data-onboarding-close>
-                        知道啦
-                    </button>
-                </div>
-            </div>
-        </div>
+        
     </div>
     </div>
     <!-- /main-content-slot -->
